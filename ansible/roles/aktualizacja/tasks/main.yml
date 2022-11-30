@@ -1,0 +1,8 @@
+---
+- name: Instalacja Webmina (Debian)
+  ansible.builtin.import_tasks: debian.yml
+  when: ansible_facts['os_family'] == "Debian"
+- name: Instalacja aktualizacji (RedHat)
+  ansible.builtin.import_tasks: redhat.yml
+  when: ansible_facts['os_family'] == "RedHat"
+...

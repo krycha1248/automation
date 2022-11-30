@@ -1,0 +1,175 @@
+---
+# - name: Instalacja nowego jajka
+#   ansible.builtin.package:
+#     update_cache: true
+#     name:
+#       - linux-image-amd64
+#     state: present
+#   notify: podmiana jajka
+# - name: Natychmiastowe wykonanie handlerów
+#   ansible.builtin.meta: flush_handlers
+- name: Instalacja zależności
+  ansible.builtin.package:
+    update_cache: true
+    state: present
+    name:
+      - gnupg2
+      - nginx-full
+      - sudo
+      - curl
+      - apt-transport-https
+- name: Zmiana hostname
+  ansible.builtin.hostname:
+    name: "{{ domain_name }}"
+- name: Dodanie repo i klucza prosody
+  block:
+    - name: Dodanie repo prosody
+      ansible.builtin.apt_repository:
+        repo: "deb http://packages.prosody.im/debian {{ ansible_distribution_release }} main"
+        state: present
+        filename: prosody
+        update_cache: false
+    - name: Dodanie klucza
+      ansible.builtin.apt_key:
+        url: https://prosody.im/files/prosody-debian-packages.key
+        state: present
+    - name: Instalacja lua
+      ansible.builtin.package:
+        name: lua5.2
+        state: present
+- name: Dodawanie repo jitsi
+  block:
+    - name: Pobranie klucza gpg
+      ansible.builtin.apt_key:
+        url: https://download.jitsi.org/jitsi-key.gpg.key
+        state: present
+        keyring: /usr/share/keyrings/jitsi-keyring.gpg
+    - name: Dodanie repo jitsi
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jitsi-keyring.gpg] https://download.jitsi.org stable/"
+        filename: jitsi-meet
+        update_cache: false
+- name: Konfiguracja firewalla
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: "{{ item.protocol }}"
+    destination_port: "{{ item.port }}"
+    jump: ACCEPT
+  with_items:
+    - { protocol: 'tcp', port: '80' }
+    - { protocol: 'tcp', port: '443' }
+    - { protocol: 'udp', port: '10000' }
+    - { protocol: 'udp', port: '3478' }
+    - { protocol: 'tcp', port: '5349' }
+- name: Zapis firewalla
+  community.general.iptables_state:
+    state: saved
+    ip_version: "{{ item.version }}"
+    path: "/etc/iptables/rules.{{ item.name }}"
+  with_items:
+    - { version: 'ipv4', name: 'v4' }
+    - { version: 'ipv6', name: 'v6' }
+- name: Konfigurowanie auto wyborów instalacji jitsi-meet
+  block:
+    - name: Konfiguracja hostname
+      ansible.builtin.debconf:
+        name: "jicofo"
+        question: "jitsi-videobridge/jvb-hostname"
+        vtype: string
+        value: "{{ domain_name }}"
+    - name: Konfiguracja certyfikatu
+      ansible.builtin.debconf:
+        name: "jitsi-meet-web-config"
+        question: "jitsi-meet/cert-choice"
+        vtype: select
+        value: "Let's Encrypt certificates"
+    - name: Konfiguracja maila dla certyfikatu
+      ansible.builtin.debconf:
+        name: "jitsi-meet-web-config"
+        question: "jitsi-meet/email"
+        vtype: string
+        value: "{{ meet_cert_mail }}"
+    - name: Konfiguracja telemetry (LE)
+      ansible.builtin.debconf:
+        name: "jitsi-meet-web-config"
+        question: "jaas-choice"
+        vtype: boolean
+        value: false
+    - name: Instalacja jitsi-meet
+      ansible.builtin.package:
+        update_cache: true
+        name: jitsi-meet
+        state: present
+- name: Post config jitsi
+  notify:
+    - Restart prosody
+    - Restart jicofo
+    - Restart jitsi-videobridge2
+  block:
+    - name: Tworzenie pokoi tylko dla zarejestrowanych użytkowników
+      ansible.builtin.lineinfile:
+        path: /etc/prosody/conf.avail/{{ domain_name }}.cfg.lua
+        regexp: "authentication = \"jitsi-anonymous\""
+        line: "   authentication = \"internal_hashed\""
+        backup: true
+    - name: Dodawanie linii do pliku
+      ansible.builtin.blockinfile:
+        path: "/etc/prosody/conf.avail/{{ domain_name }}.cfg.lua"
+        insertafter: "-- muc_lobby_whitelist"
+        marker: "-- {mark} Ansible"
+        marker_begin: "BEGIN"
+        marker_end: "END"
+        block: |
+          VirtualHost "guest.{{ domain_name }}"
+              authentication = "anonymous"
+              c2s_require_encryption = false
+    - name: Zmiana linii w kolejnym pliku
+      ansible.builtin.lineinfile:
+        path: /etc/jitsi/meet/{{ domain_name }}-config.js
+        regexp: "// anonymousdomain: 'guest.example.com'"
+        line: "       anonymousdomain: 'guest.{{ domain_name }}',"
+    - name: Konfiguracja jicofo
+      ansible.builtin.blockinfile:
+        path: /etc/jitsi/jicofo/jicofo.conf
+        insertafter: "jicofo {"
+        block: |
+          authentication: {
+            enabled: true
+            type: XMPP
+            login-url: {{ domain_name }}
+          }
+    - name: Dodanie użytkownika (prosody)
+      ansible.builtin.command: prosodyctl register krystian {{ domain_name }} {{ meet_admin_pass }}
+      changed_when: true
+    - name: Zmiana ustawień jigasi
+      ansible.builtin.blockinfile:
+        path: /etc/jitsi/jigasi/sip-communicator.properties
+        create: true
+        mode: 0600
+        block: |
+          org.jitsi.jigasi.xmpp.acc.USER_ID=krystian@{{ domain_name }}
+          org.jitsi.jigasi.xmpp.acc.PASS={{ meet_admin_pass }}
+          org.jitsi.jigasi.xmpp.acc.ANONYMOUS_AUTH=false
+- name: Modyfikacja wyglądu Włodek Meet
+  notify:
+    - Restart prosody
+    - Restart jicofo
+    - Restart jitsi-videobridge2
+  block:
+    - name: Modyfikacja języka itd.
+      ansible.builtin.lineinfile:
+        path: "/etc/jitsi/meet/{{ domain_name }}-config.js"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      with_items:
+        - { regexp: "defaultLanguage:", line: "   defaultLanguage: 'pl'," }
+        - { regexp: "requireDisplayName:", line: "   requireDisplayName: true," }
+        - { regexp: "startAudioOnly:", line: "   startAudioOnly: true," }
+        - { regexp: "startAudioMuted: ", line: "    startAudioMuted: 0," }
+        - { regexp: "startWithAudioMuted:", line: "    startWithAudioMuted: true," }
+    - name: Zmiana nazwy instancji
+      ansible.builtin.lineinfile:
+        path: /usr/share/jitsi-meet/interface_config.js
+        regexp: "   APP_NAME: 'Jitsi Meet',"
+        line: "    APP_NAME: 'Włodek Meet',"
+...

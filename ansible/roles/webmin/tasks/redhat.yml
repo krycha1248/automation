@@ -1,0 +1,10 @@
+---
+- name: Dodanie nowego repo (RedHat)
+  ansible.builtin.yum_repository:
+    description: webmin
+    name: Webmin
+    async: false
+    gpgkey: http://www.webmin.com/jcameron-key.asc
+    mirrorlist: https://download.webmin.com/download/yum/mirrorlist
+    enabled: true
+...

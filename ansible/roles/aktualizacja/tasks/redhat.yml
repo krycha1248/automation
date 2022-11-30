@@ -1,0 +1,19 @@
+---
+- name: Aktualizacja systemu (RedHat)
+  ansible.builtin.yum:
+    update_cache: true
+    update_only: true
+    name: '*'
+    state: latest
+- name: Instalacja needs restarting (RedHat)
+  ansible.builtin.yum:
+    name: "{{ ansible_facts['pkg_mgr'] }}-utils"
+    state: present
+- name: Sprawdzanie, czy trzeba zrestartować system (RedHat)
+  ansible.builtin.command: needs-restarting -r
+  register: reboot_required
+  ignore_errors: true
+  failed_when: reboot_required.rc != 0 and reboot_required.rc != 1
+  changed_when: reboot_required.rc == 1
+  notify: Restart systemu
+...

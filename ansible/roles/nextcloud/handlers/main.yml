@@ -1,0 +1,12 @@
+---
+- name: Restart-nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: true
+- name: Restart-PHP
+  ansible.builtin.service:
+    name: php7.4-fpm
+    state: restarted
+    enabled: true
+...
