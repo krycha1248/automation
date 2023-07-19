@@ -1,0 +1,10 @@
+---
+- name: Instalacja Włodek Meet
+  hosts: all
+  remote_user: root
+  become: true
+  roles:
+    - wdrozenie
+    - meet
+    - aktualizacja
+...

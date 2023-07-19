@@ -1,0 +1,22 @@
+---
+- name: Importowanie playbooka dla debiana
+  ansible.builtin.import_tasks: debian.yml
+  when: ansible_facts['os_family'] == "Debian"
+- name: Importowanie playbooka dla RedHata
+  ansible.builtin.import_tasks: redhat.yml
+  when: ansible_facts['os_family'] == "RedHat"
+- name: Instalacja webmina
+  ansible.builtin.package:
+    update_cache: true
+    name: webmin
+    state: present
+  notify: Webmin start
+- name: Konfiguracja f2b
+  ansible.builtin.blockinfile:
+    path: /etc/fail2ban/jail.local
+    insertafter: EOF
+    block: |
+      [webmin-auth]
+      enabled = true
+  notify: Restart f2b
+...

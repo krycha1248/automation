@@ -1,0 +1,16 @@
+---
+- name: Aktualizacja systemu (Debian)
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+  register: zaktualizowane_apt
+- name: Sprawdzanie, czy trzeba zresetować system (Debian)
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_file
+  changed_when: reboot_file.stat.exists
+  notify: Restart systemu
+- name: Natychmiastowy restart systemu po aktualizacji ssh (Debian)
+  ansible.builtin.reboot:
+  when: '"openssh-server" in zaktualizowane_apt.stdout'
+...

@@ -1,0 +1,126 @@
+---
+- name: Sprawdzanie, czy użytkownik istnieje
+  block:
+    - name: Przywołanie bazy danych użytkowników
+      ansible.builtin.getent:
+        database: passwd
+    - name: Przywołanie bazy danych grup
+      ansible.builtin.getent:
+        database: group
+    - name: Dodawanie grupy usera, jeśli nie istnieje
+      ansible.builtin.group:
+        name: "{{ username }}"
+        state: present
+      when: "username not in ansible_facts.getent_group"
+    - name: Dodawanie usera, jeśli nie ma go w bazie
+      ansible.builtin.user:
+        name: "{{ username }}"
+        group: "{{ username }}"
+        groups: "sudo"
+        password: "{{ haslo | string | password_hash('sha512') }}"
+        shell: "/bin/bash"
+      when: "username not in ansible_facts.getent_passwd"
+- name: Dodanie klucza ssh dla nowego użytkownika
+  ansible.posix.authorized_key:
+    user: "{{ username }}"
+    state: present
+    path: "/home/{{ username }}/.ssh/authorized_keys"
+    key: "{{ lookup('file', '~/.ssh/authorized_keys') }}"
+- name: Sudo bez hasła
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    insertafter: "See sudoers"
+    line: "{{ username }} ALL=(ALL) NOPASSWD:ALL"
+- name: Instalacja fail2ban
+  ansible.builtin.package:
+    name: fail2ban
+    state: present
+  notify: Autostart f2b
+- name: Rekonfiguracja fail2ban-server + firewall (Debian)
+  ansible.builtin.import_tasks: debian.yml
+  when: ansible_facts['os_family'] == "Debian"
+- name: Instalacja i konfiguracja zsh i vims
+  when: ansible_env['SHELL'] != "/usr/bin/zsh"
+  block:
+    - name: Instalacja zsh i vima
+      ansible.builtin.package:
+        name:
+          - git
+          - zsh
+          - vim
+          - shellcheck
+          - htop
+        state: present
+    - name: Instalacja wtyczek + motywu
+      ansible.builtin.git:
+        repo: "{{ item.repo }}"
+        dest: "{{ item.name }}"
+        update: false
+        version: master
+      with_items:
+        - { repo: 'https://github.com/ohmyzsh/ohmyzsh.git', name: '/home/{{ username }}/.oh-my-zsh'}
+        - { repo: 'https://github.com/supercrabtree/k.git', name: '/home/{{ username }}/.oh-my-zsh/custom/plugins/k' }
+        - { repo: 'https://github.com/chrissicool/zsh-256color.git', name: '/home/{{ username }}/.oh-my-zsh/custom/plugins/zsh-256color' }
+        - { repo: 'https://github.com/zsh-users/zsh-autosuggestions.git', name: '/home/{{ username }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions' }
+        - { repo: 'https://github.com/zsh-users/zsh-completions.git', name: '/home/{{ username }}/.oh-my-zsh/custom/plugins/zsh-completions' }
+        - { repo: 'https://github.com/endaaman/lxd-completion-zsh.git', name: '/home/{{ username }}/.oh-my-zsh/custom/plugins/lxd-completion-zsh' }
+        - { repo: 'https://github.com/zsh-users/zsh-syntax-highlighting.git', name: '/home/{{ username }}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting' }
+        - { repo: 'https://github.com/romkatv/powerlevel10k.git', name: '/home/{{ username }}/.oh-my-zsh/custom/themes/powerlevel10k' }
+    - name: Podrzucenie configów
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: 0644
+      with_items:
+        - { src: 'p10k.tmpl', dest: '/home/{{ username }}/.p10k.zsh' }
+        - { src: 'zshrc.tmpl', dest: '/home/{{ username }}/.zshrc' }
+    - name: Zmiana powłoki usera
+      ansible.builtin.user:
+        name: "{{ username }}"
+        shell: "/usr/bin/zsh"
+    - name: Pobieranie wtyczek vim
+      ansible.builtin.git:
+        repo: "{{ item.repo }}"
+        dest: "/home/{{ username }}/.vim/pack/vendor/start/{{ item.dest }}"
+        update: false
+        version: master
+      with_items:
+        - { repo: 'https://github.com/vim-airline/vim-airline.git', dest: 'vim-airline' }
+        - { repo: 'https://github.com/vim-airline/vim-airline-themes.git', dest: 'vim-airline-themes' }
+        - { repo: 'https://github.com/farmergreg/vim-lastplace.git', dest: 'vim-lastplace' }
+        - { repo: 'https://github.com/jiangmiao/auto-pairs.git', dest: 'vim-autopairs' }
+        - { repo: 'https://github.com/dense-analysis/ale.git', dest: 'ale' }
+        - { repo: 'https://github.com/tomasiser/vim-code-dark.git', dest: 'vim-code-dark' }
+    - name: Podrzucenie configu
+      ansible.builtin.copy:
+        src: user_vim.tmpl
+        dest: "/home/{{ username }}/.vimrc"
+        mode: 0644
+    - name: Zminana uprawnień plików zsh i vim
+      ansible.builtin.file:
+        path: "/home/{{ username }}/{{ item.name }}"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        recurse: "{{ item.recurse }}"
+      with_items:
+        - { name: '.zshrc', recurse: 'false' }
+        - { name: '.oh-my-zsh', recurse: 'true' }
+        - { name: '.p10k.zsh', recurse: 'false' }
+        - { name: '.vimrc', recurse: 'false' }
+        - { name: '.vim', recurse: 'true' }
+    - name: Tworzenie linków dla roota
+      ansible.builtin.file:
+        src: "/home/{{ username }}/{{ item }}"
+        dest: "/root/{{ item }}"
+        state: link
+      with_items:
+        - ".zshrc"
+        - ".oh-my-zsh"
+        - ".p10k.zsh"
+        - ".vim"
+        - ".vimrc"
+    - name: Zmiana powłoki roota
+      ansible.builtin.user:
+        name: root
+        shell: "/usr/bin/zsh"
+...

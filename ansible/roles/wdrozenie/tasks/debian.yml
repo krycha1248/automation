@@ -1,0 +1,56 @@
+---
+- name: Podrzucenie configów
+  ansible.builtin.copy:
+    src: "fail2ban.local.tmpl"
+    dest: "/etc/fail2ban/jail.local"
+    mode: 0644
+    force: false
+  notify: Restart f2b
+- name: Konfiguracja firewalla
+  block:
+    - name: Instalacja pakietów
+      ansible.builtin.package:
+        name:
+          - iptables
+          - iptables-persistent
+    - name: Zezwalanie na połączenia na lo
+      ansible.builtin.iptables:
+        chain: INPUT
+        in_interface: lo
+        jump: ACCEPT
+        ip_version: "{{ item }}"
+      with_items:
+        - ipv4
+        - ipv6
+    - name: Zezwalanie na połączenia nawiązane (ipv4 + ipv6)
+      ansible.builtin.iptables:
+        chain: INPUT
+        ctstate: ESTABLISHED,RELATED
+        jump: ACCEPT
+        ip_version: "{{ item }}"
+      with_items:
+        - ipv4
+        - ipv6
+    - name: Zezwalanie na SSH
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_port: 22
+        jump: ACCEPT
+    - name: Zrzucanie reszty INPUT, FORWARD, ipv4, ipv6
+      ansible.builtin.iptables:
+        chain: "{{ item[0] }}"
+        policy: "DROP"
+        ip_version: "{{ item[1] }}"
+      with_nested:
+        - ['INPUT', 'FORWARD']
+        - ['ipv4', 'ipv6']
+    - name: Zapis iptables-persistent
+      community.general.iptables_state:
+        state: saved
+        ip_version: "{{ item.version }}"
+        path: "/etc/iptables/rules.{{ item.name }}"
+      with_items:
+        - { version: 'ipv4', name: 'v4' }
+        - { version: 'ipv6', name: 'v6' }
+...

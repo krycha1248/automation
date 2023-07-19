@@ -1,0 +1,4 @@
+---
+- name: Restart systemu
+  ansible.builtin.reboot:
+...

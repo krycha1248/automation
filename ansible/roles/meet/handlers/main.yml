@@ -1,0 +1,44 @@
+---
+- name: Instalacja headerów do jajka
+  ansible.builtin.package:
+    name: linux-headers-amd64
+    state: present
+  listen: "podmiana jajka"
+- name: Skasowanie aktualnego jajka
+  ansible.builtin.apt:
+    name:
+      - linux-image-{{ ansible_kernel }}
+      - linux-headers-{{ ansible_kernel }}
+    state: absent
+    force: true
+  listen: "podmiana jajka"
+- name: Restart systemu po zmianie jajka
+  ansible.builtin.reboot:
+  listen: "podmiana jajka"
+- name: Ładowanie modułu snd_aloop do jajka
+  community.general.modprobe:
+    name: snd-aloop
+    state: present
+  listen: "podmiana jajka"
+- name: Autostart modułu
+  ansible.builtin.lineinfile:
+    line: snd-aloop
+    insertafter: EOF
+    path: /etc/modules
+  listen: "podmiana jajka"
+- name: Restart prosody
+  ansible.builtin.service:
+    name: prosody
+    state: restarted
+    enabled: true
+- name: Restart jicofo
+  ansible.builtin.service:
+    name: jicofo
+    state: restarted
+    enabled: true
+- name: Restart jitsi-videobridge2
+  ansible.builtin.service:
+    name: jitsi-videobridge2
+    state: restarted
+    enabled: true
+...

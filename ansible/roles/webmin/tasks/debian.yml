@@ -1,0 +1,32 @@
+---
+- name: Instalacja gnupg (Debian)
+  ansible.builtin.apt:
+    update_cache: true
+    name: gnupg
+    state: present
+- name: Dodanie klucza gpg (Debian)
+  ansible.builtin.apt_key:
+    url: http://www.webmin.com/jcameron-key.asc
+    state: present
+- name: Dodanie nowego repo (Debian)
+  ansible.builtin.apt_repository:
+    repo: deb http://download.webmin.com/download/repository sarge contrib
+    state: present
+    filename: webmin
+- name: Konfiguracja firewalla
+  block:
+    - name: Zezwalanie na dostęp na firewallu
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_port: 10000
+        jump: ACCEPT
+    - name: Zapis iptables-persistent
+      community.general.iptables_state:
+        state: saved
+        ip_version: "{{ item.version }}"
+        path: "/etc/iptables/rules.{{ item.name }}"
+      with_items:
+        - { version: 'ipv4', name: 'v4' }
+        - { version: 'ipv6', name: 'v6' }
+...

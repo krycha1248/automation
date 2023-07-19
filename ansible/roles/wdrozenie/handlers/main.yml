@@ -1,0 +1,12 @@
+---
+- name: Autostart f2b
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+- name: Restart f2b
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+    enabled: true
+...

@@ -1,0 +1,10 @@
+---
+- name: Instalacja webmina
+  hosts: all
+  remote_user: root
+  become: true
+  roles:
+    - wdrozenie
+    - aktualizacja
+    - webmin
+...

@@ -1,0 +1,6 @@
+/terraform/*/\.terraform*
+/terraform/*/*\.tfstate*
+terraform/*/dyn-inventory
+/ansible/host_vars/*.yml
+/ansible/roles/*/vars/main/vault.yml
+/ansible/roles/wdrozenie/vars/main/*.yml

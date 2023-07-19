@@ -1,0 +1,34 @@
+let g:airline_theme = 'codedark'
+let g:airline#extensions#tabline#enabled = 1
+autocmd BufNewFile,BufRead *.pro set filetype=sh
+
+" Syntax settings
+function! LinterStatus() abort
+    let l:counts = ale#statusline#Count(bufnr(''))
+    let l:all_errors = l:counts.error + l:counts.style_error
+    let l:all_non_errors = l:counts.total - l:all_errors
+    return l:counts.total == 0 ? 'OK' : printf(
+        \   '%d⨉ %d⚠ ',
+        \   all_non_errors,
+        \   all_errors
+        \)
+endfunction
+let g:ale_lint_on_save = 1
+let g:ale_lint_on_enter = 1
+let g:airline#extensions#ale#enabled = 1
+let g:ale_pattern_options = {'.*\.pro$': {'ale_enabled': 0}}
+set statusline+=\ %{LinterStatus()}
+set statusline+=%=
+syntax on
+set syntax=sh
+set nocompatible
+set showmode
+set showcmd
+set encoding=utf-8
+set nowrap
+set incsearch
+set autoindent
+set mouse=a
+set cursorline
+set background=dark
+colorscheme codedark

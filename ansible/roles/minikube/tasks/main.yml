@@ -1,0 +1,58 @@
+---
+- name: Install requirement packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - apt-transport-https
+    update_cache: true
+- name: Create directory for keyrings
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    owner: root
+    group: root
+    state: directory
+    mode: 0755
+- name: Copy docker gpg
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+    keyring: /etc/apt/keyrings/docker.gpg
+- name: Add docker repository
+  ansible.builtin.apt_repository:
+    filename: docker
+    repo: deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg]
+          https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable
+    state: present
+    update_cache: true
+- name: Install docker and dependencies
+  ansible.builtin.package:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+- name: Copy kubernetes gpg
+  ansible.builtin.apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+    keyring: /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+- name: Add kubernetes repository
+  ansible.builtin.apt_repository:
+    filename: kubernetes
+    repo: deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/
+          kubernetes-xenial main
+    state: present
+    update_cache: true
+- name: Install kubectl
+  ansible.builtin.package:
+    name: kubectl
+    state: present
+- name: Install minikube
+  ansible.builtin.apt:
+    deb: https://storage.googleapis.com/minikube/releases/latest/minikube_latest_amd64.deb
+    state: present
+...

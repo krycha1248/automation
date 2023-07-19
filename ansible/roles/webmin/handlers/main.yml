@@ -1,0 +1,16 @@
+---
+- name: Webmin start
+  ansible.builtin.service:
+    name: webmin
+    state: started
+    enabled: true
+- name: Webmin restart
+  ansible.builtin.service:
+    name: webmin
+    state: restarted
+- name: Restart f2b
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+    enabled: true
+...
